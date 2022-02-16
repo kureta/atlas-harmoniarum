@@ -17,6 +17,31 @@ def to_piglet_length(r, h):
     return r * h / 2
 
 
+class DebugLabel(pyglet.text.Label):
+    def __init__(self, width, height, font_size=20):
+        super().__init__('',
+                         font_name='Times New Roman',
+                         font_size=font_size,
+                         x=0, y=height,
+                         anchor_x='left', anchor_y='top',
+                         width=width,
+                         multiline=True)
+
+    def update_text(self, locations):
+        # Update debug text
+        text = []
+        for family, loc in locations.items():
+            if len(loc) > 0:
+                text.append(f'{family}: {" ".join(str(n) for n in loc)}')
+            else:
+                text.append(f'{family}: ')
+
+        n_scales = sum([len(pl) for pl in locations.values()])
+        text.append('')
+        text.append(f'n possibilities: {n_scales}')
+        self.text = '\n'.join(text)
+
+
 class Window(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -24,13 +49,7 @@ class Window(pyglet.window.Window):
         self.fps_display = pyglet.window.FPSDisplay(window=self)
 
         # Show some parameters for debugging.
-        self.label = pyglet.text.Label('Hello, world',
-                                       font_name='Times New Roman',
-                                       font_size=20,
-                                       x=0, y=self.height,
-                                       anchor_x='left', anchor_y='top',
-                                       width=self.width,
-                                       multiline=True)
+        self.label = DebugLabel(self.width, self.height)
 
         # State variables for calculating currently playing notes
         self.down_keys = np.zeros(12, dtype=int)
@@ -53,18 +72,7 @@ class Window(pyglet.window.Window):
         self.fps_display.draw()
 
     def update(self, dt):
-        # Currently updates debug text and test circle position.
-        text = []
-        for family, locations in self.locations.items():
-            if len(locations) > 0:
-                text.append(f'{family}: {" ".join(str(n) for n in locations)}')
-            else:
-                text.append(f'{family}: ')
-
-        n_scales = sum([len(pl) for pl in self.locations.values()])
-        text.append('')
-        text.append(f'n possibilities: {n_scales}')
-        self.label.text = '\n'.join(text)
+        self.label.update_text(self.locations)
 
         # Move circle
         w = 0.5
