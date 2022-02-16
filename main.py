@@ -1,10 +1,8 @@
-from ctypes import c_int8
-
 import mido
 import numpy as np
 import pyglet
 
-from process import default_locations, locate_chord, to_binary
+from process import default_locations, locate_chord
 
 
 # From "origin at center, top = 1, bottom = -1,
@@ -35,9 +33,9 @@ class Window(pyglet.window.Window):
                                        multiline=True)
 
         # State variables for calculating currently playing notes
-        self.down_keys = set()
-        self.pedal_state = c_int8(0)
-        self.playing_keys = set()
+        self.down_keys = np.zeros(12, dtype=int)
+        self.pedal_state = np.zeros(1, dtype=int)
+        self.playing_keys = np.zeros(12, dtype=int)
 
         # Location of currently played notes in all scale families, if they are contained.
         self.locations = default_locations
@@ -58,8 +56,10 @@ class Window(pyglet.window.Window):
         # Currently updates debug text and test circle position.
         text = []
         for family, locations in self.locations.items():
-            if locations:
+            if len(locations) > 0:
                 text.append(f'{family}: {" ".join(str(n) for n in locations)}')
+            else:
+                text.append(f'{family}: ')
 
         n_scales = sum([len(pl) for pl in self.locations.values()])
         text.append('')
@@ -77,20 +77,19 @@ class Window(pyglet.window.Window):
     def on_midi_event(self, message):
         # Calculate which notes are currently played, factoring in the hold pedal.
         if message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
-            self.down_keys.remove(message.note)
-            if self.pedal_state.value == 0:
-                self.playing_keys.remove(message.note)
+            self.down_keys[message.note % 12] = 0
+            if self.pedal_state[0] == 0:
+                self.playing_keys[message.note % 12] = 0
         elif message.type == 'note_on' and message.velocity > 0:
-            self.down_keys.add(message.note)
-            self.playing_keys.add(message.note)
+            self.down_keys[message.note % 12] = 1
+            self.playing_keys[message.note % 12] = 1
         elif message.type == 'control_change' and message.control == 64:
-            self.pedal_state.value = message.value
-            if self.pedal_state.value == 0:
-                self.playing_keys.intersection_update(self.down_keys)
+            self.pedal_state[0] = message.value
+            if self.pedal_state[0] == 0:
+                self.playing_keys[:] = self.down_keys[:]
 
         # Process midi event
-        binary = to_binary(self.playing_keys)
-        self.locations = locate_chord(binary)
+        self.locations = locate_chord(self.playing_keys)
 
 
 def main():

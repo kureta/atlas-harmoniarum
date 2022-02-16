@@ -13,40 +13,30 @@ scale_families = {
 }
 
 default_locations = {
-    'major': list(range(12)),
-    'melodic_minor': list(range(12)),
-    'harmonic_major': list(range(12)),
-    'harmonic_minor': list(range(12)),
-    'wholetone': list(range(2)),
-    'octatonic': list(range(3)),
-    'augmented': list(range(4)),
+    'major': np.arange(12, dtype=int),
+    'melodic_minor': np.arange(12, dtype=int),
+    'harmonic_major': np.arange(12, dtype=int),
+    'harmonic_minor': np.arange(12, dtype=int),
+    'wholetone': np.arange(2, dtype=int),
+    'octatonic': np.arange(3, dtype=int),
+    'augmented': np.arange(4, dtype=int),
 }
 
 pc_to_name = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 
-def to_binary(pitches, edo=12):
-    if not pitches:
-        return np.zeros(0)
-    pitch_classes = sorted(list({n % edo for n in pitches}))
-
-    binary = np.zeros(edo, dtype=int)
-    binary[pitch_classes] = 1
-
-    return binary
-
-
 # Where a certain chord appears in a scale family
 def _locate_chord(family, chord):
     locations = np.correlate(np.pad(family, (0, len(chord) - 1), 'wrap'), chord, mode='valid') == np.sum(chord)
-    return list(np.sort((len(family) - np.argwhere(locations).flatten()) % len(family)))
+    return np.sort((len(family) - np.argwhere(locations).flatten()) % len(family))
 
 
 # Where a chord appears in all scale families
 def locate_chord(chord):
     if len(chord) == 0:
         return default_locations
+
     locations = {}
-    for name, pcs in scale_families.items():
-        locations[name] = _locate_chord(pcs, chord)
+    for family, values in scale_families.items():
+        locations[family] = _locate_chord(values, chord)
     return locations
