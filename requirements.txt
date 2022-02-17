@@ -1,4 +1,5 @@
-mido
-numpy
-pyglet
-python-rtmidi
+mido==1.2.10
+networkx==2.6.3
+numpy==1.22.2
+pyglet==1.5.21
+python-rtmidi==1.4.9

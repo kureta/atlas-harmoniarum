@@ -62,30 +62,53 @@ short_names = {
     'augmented': 'a',
 }
 
+connections = {
+    'major': [('major', 7), ('melodic_minor', 2), ('harmonic_minor', 9)],
+    'melodic_minor': [('major', 0), ('harmonic_major', 7), ('octatonic', 0), ('wholetone', 1)],
+    'harmonic_major': [('major', 0), ('octatonic', 1), ('augmented', 0)],
+    'harmonic_minor': [('melodic_minor', 0), ('harmonic_major', 0), ('octatonic', 0), ('augmented', 0)],
+    'wholetone': [],
+    'octatonic': [],
+    'augmented': []
+}
+
+phases = {
+    'major': 0,
+    'melodic_minor': 0,
+    'harmonic_major': 0,
+    'harmonic_minor': 0,
+    'wholetone': 0,
+    'octatonic': 0,
+    'augmented': 0,
+}
+
 
 class Graph:
     def __init__(self, transform, offset, scale):
-        graph_scale = 0.1
-        graph_offset = 2.0
-        graph_phase = 0.0
+        graph_scale = 0.15
+        graph_offset = 0.01
 
         centers = {}
         for name, value in scale_families.items():
+            n_steps = len(scale_families[name])
             steps = len(value)
             base_r = radii[name]
             for idx in range(steps):
                 centers[(name, idx)] = (
-                    (graph_offset + base_r) * graph_scale * np.sin(2 * np.pi * ((idx * 7) % 12) / steps + graph_phase),
-                    (graph_offset + base_r) * graph_scale * np.cos(2 * np.pi * ((idx * 7) % 12) / steps + graph_phase))
+                    (graph_offset + base_r * graph_scale) * np.sin(
+                        2 * np.pi * ((idx * 7) % n_steps) / steps + phases[name]),
+                    (graph_offset + base_r * graph_scale) * np.cos(
+                        2 * np.pi * ((idx * 7) % n_steps) / steps + phases[name]))
 
-        self.batch = pyglet.graphics.Batch()
+        self.circles_batch = pyglet.graphics.Batch()
+        self.lines_batch = pyglet.graphics.Batch()
         self.labels_batch = pyglet.graphics.Batch()
         self.circles = {}
         self.labels = {}
         for (name, idx), coord in centers.items():
             coord = np.array(coord).T
             coord = transform @ coord + offset
-            self.circles[(name, idx)] = pyglet.shapes.Circle(*coord, 0.04 * scale, batch=self.batch,
+            self.circles[(name, idx)] = pyglet.shapes.Circle(*coord, 0.04 * scale, batch=self.circles_batch,
                                                              color=(255, 0, 25))
             self.labels[(name, idx)] = pyglet.text.Label(f'{short_names[name]} {idx}',
                                                          font_name='Noto Sans',
@@ -93,9 +116,17 @@ class Graph:
                                                          x=coord[0], y=coord[1],
                                                          anchor_x='center', anchor_y='center',
                                                          batch=self.labels_batch)
+        self.lines = []
+        for (name, step), circle in self.circles.items():
+            for (next_name, next_step) in connections[name]:
+                n_steps = len(scale_families[next_name])
+                next_circle = self.circles[(next_name, (step + next_step) % n_steps)]
+                self.lines.append(pyglet.shapes.Line(circle.x, circle.y, next_circle.x, next_circle.y,
+                                                     batch=self.lines_batch))
 
     def draw(self):
-        self.batch.draw()
+        self.lines_batch.draw()
+        self.circles_batch.draw()
         self.labels_batch.draw()
 
     def update(self, locations):
@@ -123,9 +154,10 @@ class Window(pyglet.window.Window):
         self.label = DebugLabel(self.width, self.height)
 
         # State variables for calculating currently playing notes
-        self.down_keys = np.zeros(12, dtype=int)
+        self.down_keys = np.zeros(12 * 12, dtype=int)
         self.pedal_state = np.zeros(1, dtype=int)
-        self.playing_keys = np.zeros(12, dtype=int)
+        self.playing_keys = np.zeros(12 * 12, dtype=int)
+        self.playing_pitch_classes = np.zeros(12, dtype=int)
         self.changed = True
 
         # Location of currently played notes in all scale families, if they are contained.
@@ -153,19 +185,20 @@ class Window(pyglet.window.Window):
         self.changed = True
         # Calculate which notes are currently played, factoring in the hold pedal.
         if message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
-            self.down_keys[message.note % 12] = 0
+            self.down_keys[message.note] = 0
             if self.pedal_state[0] == 0:
-                self.playing_keys[message.note % 12] = 0
+                self.playing_keys[message.note] = 0
         elif message.type == 'note_on' and message.velocity > 0:
-            self.down_keys[message.note % 12] = 1
-            self.playing_keys[message.note % 12] = 1
+            self.down_keys[message.note] = 1
+            self.playing_keys[message.note] = 1
         elif message.type == 'control_change' and message.control == 64:
             self.pedal_state[0] = message.value
             if self.pedal_state[0] == 0:
                 self.playing_keys[:] = self.down_keys[:]
 
+        self.playing_pitch_classes = np.any(self.playing_keys.reshape(12, 12), axis=0)
         # Process midi event
-        self.locations = locate_chord(self.playing_keys)
+        self.locations = locate_chord(self.playing_pitch_classes)
 
 
 def main():
