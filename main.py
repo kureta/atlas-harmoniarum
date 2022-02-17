@@ -126,6 +126,7 @@ class Window(pyglet.window.Window):
         self.down_keys = np.zeros(12, dtype=int)
         self.pedal_state = np.zeros(1, dtype=int)
         self.playing_keys = np.zeros(12, dtype=int)
+        self.changed = True
 
         # Location of currently played notes in all scale families, if they are contained.
         self.locations = default_locations
@@ -143,10 +144,13 @@ class Window(pyglet.window.Window):
         self.fps_display.draw()
 
     def update(self, _dt):
-        self.label.update_text(self.locations)
-        self.graph.update(self.locations)
+        if self.changed:
+            self.label.update_text(self.locations)
+            self.graph.update(self.locations)
+            self.changed = False
 
     def on_midi_event(self, message):
+        self.changed = True
         # Calculate which notes are currently played, factoring in the hold pedal.
         if message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
             self.down_keys[message.note % 12] = 0
