@@ -2,15 +2,15 @@ import mido
 import numpy as np
 import pyglet
 
-from process import default_locations, locate_chord
+from process import default_locations, locate_chord, scale_families
 
 
 # From "origin at center, top = 1, bottom = -1,
 # left and right are whatever the aspect ratio dictates" coordinates
 def to_pyglet_coordinates(x, y, w, h):
     transform = np.array([[h / 2, 0.], [0, h / 2]])
-    coordinates = np.array([x, y])
-    return coordinates @ transform + np.array([w / 2, h / 2])
+    coordinates = np.array([x, y]).T
+    return transform @ coordinates + np.array([w / 2, h / 2])
 
 
 def to_piglet_length(r, h):
@@ -42,9 +42,80 @@ class DebugLabel(pyglet.text.Label):
         self.text = '\n'.join(text)
 
 
+radii = {
+    'major': 3,
+    'melodic_minor': 2,
+    'harmonic_major': 4,
+    'harmonic_minor': 5,
+    'wholetone': 1,
+    'octatonic': 6,
+    'augmented': 7,
+}
+
+short_names = {
+    'major': 'M',
+    'melodic_minor': 'm',
+    'harmonic_major': 'H',
+    'harmonic_minor': 'h',
+    'wholetone': 'w',
+    'octatonic': 'o',
+    'augmented': 'a',
+}
+
+
+class Graph:
+    def __init__(self, transform, offset, scale):
+        graph_scale = 0.1
+        graph_offset = 2.0
+        graph_phase = 0.0
+
+        centers = {}
+        for name, value in scale_families.items():
+            steps = len(value)
+            base_r = radii[name]
+            for idx in range(steps):
+                centers[(name, idx)] = (
+                    (graph_offset + base_r) * graph_scale * np.sin(2 * np.pi * ((idx * 7) % 12) / steps + graph_phase),
+                    (graph_offset + base_r) * graph_scale * np.cos(2 * np.pi * ((idx * 7) % 12) / steps + graph_phase))
+
+        self.batch = pyglet.graphics.Batch()
+        self.labels_batch = pyglet.graphics.Batch()
+        self.circles = {}
+        self.labels = {}
+        for (name, idx), coord in centers.items():
+            coord = np.array(coord).T
+            coord = transform @ coord + offset
+            self.circles[(name, idx)] = pyglet.shapes.Circle(*coord, 0.04 * scale, batch=self.batch,
+                                                             color=(255, 0, 25))
+            self.labels[(name, idx)] = pyglet.text.Label(f'{short_names[name]} {idx}',
+                                                         font_name='Times New Roman',
+                                                         font_size=14,
+                                                         x=coord[0], y=coord[1],
+                                                         anchor_x='center', anchor_y='center',
+                                                         batch=self.labels_batch)
+
+    def draw(self):
+        self.batch.draw()
+        self.labels_batch.draw()
+
+    def update(self, locations):
+        for circle in self.circles.values():
+            circle.color = (255, 0, 25)
+        for key, locs in locations.items():
+            for loc in locs:
+                self.circles[(key, loc)].color = (0, 25, 255)
+
+
 class Window(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Transformation matrix from origin at center, unit size coordinates to pyglet coordinates
+        self.transform = np.array([[self.height / 2, 0.], [0, self.height / 2]])
+        # Center offset
+        self.offset = np.array([self.width / 2, self.height / 2])
+        # Scaling factor
+        self.scale = self.height / 2
+
         # Show FPS for debugging purposes.
         self.fps_display = pyglet.window.FPSDisplay(window=self)
 
@@ -59,28 +130,21 @@ class Window(pyglet.window.Window):
         # Location of currently played notes in all scale families, if they are contained.
         self.locations = default_locations
 
-        # Just a test circle
-        self.circle = pyglet.shapes.Circle(
-            *to_pyglet_coordinates(0, 1, self.width, self.height),
-            to_piglet_length(0.2, self.height))
-        self.t = 0.
+        self.graph = Graph(self.transform, self.offset, self.scale)
+
+    def to_pyglet_coordinates(self, x, y):
+        coordinates = np.array([x, y]).T
+        return self.transform @ coordinates + self.offset
 
     def on_draw(self):
         self.clear()
         self.label.draw()
-        self.circle.draw()
+        self.graph.draw()
         self.fps_display.draw()
 
-    def update(self, dt):
+    def update(self, _dt):
         self.label.update_text(self.locations)
-
-        # Move circle
-        w = 0.5
-        self.t += dt
-        x = np.sin(w * self.t)
-        y = np.cos(w * self.t)
-        self.circle.x, self.circle.y = to_pyglet_coordinates(x, y, self.width, self.height)
-        self.circle.color = (255, (x + 1) / 2 * 255, (y + 1) / 2 * 255)
+        self.graph.update(self.locations)
 
     def on_midi_event(self, message):
         # Calculate which notes are currently played, factoring in the hold pedal.
