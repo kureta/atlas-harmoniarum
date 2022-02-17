@@ -20,7 +20,7 @@ def to_piglet_length(r, h):
 class DebugLabel(pyglet.text.Label):
     def __init__(self, width, height, font_size=20):
         super().__init__('',
-                         font_name='Times New Roman',
+                         font_name='Noto Sans',
                          font_size=font_size,
                          x=0, y=height,
                          anchor_x='left', anchor_y='top',
@@ -88,7 +88,7 @@ class Graph:
             self.circles[(name, idx)] = pyglet.shapes.Circle(*coord, 0.04 * scale, batch=self.batch,
                                                              color=(255, 0, 25))
             self.labels[(name, idx)] = pyglet.text.Label(f'{short_names[name]} {idx}',
-                                                         font_name='Times New Roman',
+                                                         font_name='Noto Sans',
                                                          font_size=14,
                                                          x=coord[0], y=coord[1],
                                                          anchor_x='center', anchor_y='center',
