@@ -5,6 +5,16 @@ import pyglet
 from process import default_locations, locate_chord, scale_families
 
 
+# TODO: highlight all scales that include currently playing notes
+#       color remaining scales according to their shortest distance from any highlighted node
+#       add mode based on lowest playing node (if M0 is highlighted with F in bass add F Lydian to label)
+#       show an option to enable "avoid notes"
+#       create an nx.Graph, add all info as node attributes and make a GraphDrawer class
+
+# TODO: try adding a decay time for all highlights
+
+# TODO: add `from_pyglet_coordinates`, `from_pyglet_length`, and `to/from_polar_coordinates`
+
 # From "origin at center, top = 1, bottom = -1,
 # left and right are whatever the aspect ratio dictates" coordinates
 def to_pyglet_coordinates(x, y, w, h):
@@ -85,7 +95,7 @@ phases = {
 
 class Graph:
     def __init__(self, transform, offset, scale):
-        graph_scale = 0.15
+        graph_scale = 0.13
         graph_offset = 0.01
 
         centers = {}
@@ -203,9 +213,7 @@ class Window(pyglet.window.Window):
 
 def main():
     config = pyglet.gl.Config(sample_buffers=1, samples=4, depth_size=16, double_buffer=True)
-    window = Window(width=1920, height=1080, caption='Harmony Helper',
-                    style=pyglet.window.Window.WINDOW_STYLE_BORDERLESS,
-                    config=config)
+    window = Window(fullscreen=True, caption='Atlas Harmoniarum', config=config)
     pyglet.clock.schedule_interval(window.update, 1 / 60.)
     with mido.open_input(mido.get_input_names()[2], callback=window.on_midi_event) as port:
         pyglet.app.run()
