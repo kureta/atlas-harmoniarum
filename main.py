@@ -1,3 +1,5 @@
+import argparse
+
 import mido
 import networkx as nx
 import numpy as np
@@ -56,6 +58,11 @@ class Window(pyglet.window.Window):
         # Graph of harmonic relationships
         self.graph = build_graph()
 
+        # TODO: color decay time
+        self.has_chord = (0, 0, 255)
+        self.avoid = (255, 0, 0)
+        self.other = (255, 255, 255)
+
         # Background
         bg_color = (100, 100, 100, 255)
         self.background = pyglet.image.SolidColorImagePattern(bg_color).create_image(self.width, self.height)
@@ -105,14 +112,15 @@ class Window(pyglet.window.Window):
             for _, data in self.graph.nodes(data=True):
                 shit = has_chord(data, self.playing_pitch_classes)
                 if shit:
-                    data['circle'].color = (0, 0, 255)
+                    data['circle'].color = self.has_chord
                     avoid = has_avoid_notes(data, self.playing_pitch_classes)
-                    if avoid:
-                        data['circle'].color = (255, 0, 0)
+                    if False:
+                        data['circle'].color = self.avoid
                 else:
-                    data['circle'].color = (255, 255, 255)
+                    data['circle'].color = self.other
 
     def on_midi_event(self, message):
+        # TODO: pedal problem
         self.changed = True
         # Calculate which notes are currently played, factoring in the hold pedal.
         if message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
@@ -131,10 +139,28 @@ class Window(pyglet.window.Window):
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Atlas Harmoniarum')
+    parser.add_argument('--index', type=int, help='MIDI input device number.')
+
+    args = parser.parse_args()
+    inputs = mido.get_input_names()
+    if not args.index:
+        for i, name in enumerate(inputs):
+            print(f'[{i + 1}]: {name}')
+        selected = None
+        while not selected:
+            try:
+                index = int(input('Please enter MIDI input number:'))
+                selected = inputs[index - 1]
+            except (IndexError, ValueError):
+                print('Invalid number!')
+    else:
+        selected = inputs[args.index - 1]
+
     config = pyglet.gl.Config(sample_buffers=1, samples=4, depth_size=16, double_buffer=True)
     window = Window(fullscreen=True, caption='Atlas Harmoniarum', config=config)
     pyglet.clock.schedule_interval(window.update, 1 / 60.)
-    with mido.open_input(mido.get_input_names()[2], callback=window.on_midi_event):
+    with mido.open_input(selected, callback=window.on_midi_event):
         pyglet.app.run()
 
 
