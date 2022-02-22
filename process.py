@@ -50,20 +50,3 @@ default_locations = {
 }
 
 pc_to_name = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-
-
-# Where a certain chord appears in a scale family
-def _locate_chord(family, chord):
-    locations = np.correlate(np.pad(family, (0, len(chord) - 1), 'wrap'), chord, mode='valid') == np.sum(chord)
-    return np.sort((len(family) - np.argwhere(locations).flatten()) % len(family))
-
-
-# Where a chord appears in all scale families
-def locate_chord(chord):
-    if len(chord) == 0:
-        return default_locations
-
-    locations = {}
-    for family, values in scale_families.items():
-        locations[family] = _locate_chord(values, chord)
-    return locations
