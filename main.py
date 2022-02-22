@@ -8,6 +8,12 @@ import pyglet
 from process import connections, radii, scale_families, short_names
 
 
+# TODO: We have adjustable decay time for color changes but, in general, everything is a mess.
+# Gots to have my piano keys with available notes.
+# Gots to find a clean way to display available tensions, avoid notes, neighboring tones, etc.
+# Gots to decide on a final GUI/Graphics framework. Seems like pyglet is not suitable for this purpose.
+
+
 def build_graph():
     graph = nx.Graph()
     for name, pattern in scale_families.items():
@@ -39,6 +45,14 @@ def has_avoid_notes(data, chord):
     return avoid_notes @ padded > 0
 
 
+def lerp(v1, v2, t):
+    return v1 + t * (v2 - v1)
+
+
+def color_lerp(c1, c2, t):
+    return [lerp(v1, v2, t) for v1, v2 in zip(c1, c2)]
+
+
 class Window(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,6 +76,7 @@ class Window(pyglet.window.Window):
         self.has_chord = (0, 0, 255)
         self.avoid = (255, 0, 0)
         self.other = (255, 255, 255)
+        self.v_color = 1.5
 
         # Background
         bg_color = (100, 100, 100, 255)
@@ -74,6 +89,7 @@ class Window(pyglet.window.Window):
                                                2 * np.pi * ((step * 7) % data['n_steps']) / data['n_steps'])
             r = 0.06 * self.scale
             data['circle'] = pyglet.shapes.Circle(x, y, r, batch=self.circles_batch)
+            data['has_chord'] = 1.0
 
         self.lines_batch = pyglet.shapes.Batch()
         for a, b, data in self.graph.edges(data=True):
@@ -106,18 +122,16 @@ class Window(pyglet.window.Window):
         self.labels_batch.draw()
         self.fps_display.draw()
 
-    def update(self, _dt):
-        if self.changed:
-            self.changed = False
-            for _, data in self.graph.nodes(data=True):
-                shit = has_chord(data, self.playing_pitch_classes)
-                if shit:
-                    data['circle'].color = self.has_chord
-                    avoid = has_avoid_notes(data, self.playing_pitch_classes)
-                    if False:
-                        data['circle'].color = self.avoid
-                else:
-                    data['circle'].color = self.other
+    def update(self, dt):
+        for _, data in self.graph.nodes(data=True):
+            if has_chord(data, self.playing_pitch_classes):
+                data['has_chord'] = min(data['has_chord'] + self.v_color * dt, 1.0)
+                avoid = has_avoid_notes(data, self.playing_pitch_classes)
+                if False:
+                    data['circle'].color = self.avoid
+            else:
+                data['has_chord'] = max(data['has_chord'] - 10 * self.v_color * dt, 0.0)
+            data['circle'].color = color_lerp(self.other, self.has_chord, data['has_chord'])
 
     def on_midi_event(self, message):
         # TODO: pedal problem
